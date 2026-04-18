@@ -36,17 +36,24 @@ transactionSchema.pre('save', function (next) {
   next();
 });
 
-// ── Decrypt a single doc back to plain numbers ─────────────────────────────────
+// ── Decrypt a single doc back to plain numbers ─────────────────────────────────────────────
 transactionSchema.methods.decryptFields = function () {
   const obj = this.toObject();
+  // Support both 'enc' (new) and '_enc' (old) field names for backwards compatibility
+  const envelope = this.enc || this._doc?._enc;
   for (const field of SENSITIVE) {
     try {
-      obj[field] = decrypt({
-        iv:   this.enc?.[field]?.iv,
-        data: this[field],
-        tag:  this.enc?.[field]?.tag
-      });
-    } catch {
+      const iv  = envelope?.[field]?.iv;
+      const tag = envelope?.[field]?.tag;
+      const data = this[field];
+      if (!iv || !tag || !data) {
+        // Field not encrypted — already a plain number (shouldn't happen but handle gracefully)
+        obj[field] = typeof data === 'number' ? data : null;
+        continue;
+      }
+      obj[field] = decrypt({ iv, data, tag });
+    } catch (e) {
+      console.error(`decryptFields failed for ${field}:`, e.message);
       obj[field] = null;
     }
   }

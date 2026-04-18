@@ -9,6 +9,7 @@ import { encrypt, decrypt } from '../utils/encryption.js';
 import { log, ACTIONS } from '../services/auditService.js';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
 import { getBtcPriceINR } from '../services/priceService.js';
+import { getDecryptedPortfolio } from '../utils/portfolioHelper.js';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
@@ -231,7 +232,8 @@ export const addDeposit = async (req, res) => {
     }
 
     await log(req.userId, 'WALLET_DEPOSIT', { amount, monthlyAmount }, req);
-    res.json({ success: true, newBalance: user.walletBalance, hasFullAccess: user.hasFullAccess, user: sanitizeUser(user) });
+    const portfolio = await getDecryptedPortfolio(req.userId);
+    res.json({ success: true, newBalance: user.walletBalance, hasFullAccess: user.hasFullAccess, user: sanitizeUser(user), portfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

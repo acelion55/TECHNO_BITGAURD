@@ -5,6 +5,7 @@ import Transaction from '../models/Transaction.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
 import { log, ACTIONS } from '../services/auditService.js';
+import { getDecryptedPortfolio } from '../utils/portfolioHelper.js';
 import {
   generateAccessToken, generateRefreshToken,
   verifyRefreshToken, hashToken, compareToken,
@@ -52,7 +53,7 @@ export const signup = async (req, res) => {
     sendWelcomeEmail(user).catch(e => console.error('Welcome email failed:', e.message));
     log(user._id, ACTIONS.SIGNUP, { email, name, riskMode: user.riskMode }, req);
 
-    const portfolio = await Portfolio.findOne({ userId: user._id }).populate('transactions');
+    const portfolio = await getDecryptedPortfolio(user._id);
     res.status(201).json({ message: 'Account created successfully', user: sanitizeUser(user), portfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -82,7 +83,7 @@ export const login = async (req, res) => {
     setAuthCookies(res, accessToken, refreshToken);
     log(user._id, ACTIONS.LOGIN, { success: true, email }, req);
 
-    const portfolio = await Portfolio.findOne({ userId: user._id }).populate('transactions');
+    const portfolio = await getDecryptedPortfolio(user._id);
     res.json({ message: 'Login successful', user: sanitizeUser(user), portfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -198,7 +199,7 @@ export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const portfolio = await Portfolio.findOne({ userId: user._id }).populate('transactions');
+    const portfolio = await getDecryptedPortfolio(user._id);
     res.json({ user: sanitizeUser(user), portfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });
