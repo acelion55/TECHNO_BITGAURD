@@ -3,7 +3,6 @@ import Portfolio from '../models/Portfolio.js';
 import Transaction from '../models/Transaction.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { runAIAgent } from '../services/aiAgent.js';
-import { encrypt, decrypt } from '../utils/encryption.js';
 import { log, ACTIONS } from '../services/auditService.js';
 import { sendAiBuyEmail } from '../services/emailService.js';
 
@@ -21,19 +20,16 @@ export const simulateBuy = async (req, res) => {
     const priceData    = await getBtcPriceINR();
     const currentPrice = priceData?.inr || FALLBACK_INR;
 
-    // Decrypt transactions for AI analysis
-    const decryptedTxs = (portfolio?.transactions || []).map(tx => {
-      try { return tx.encryptedData ? decrypt(tx.encryptedData) : tx.toObject(); }
-      catch { return tx.toObject(); }
-    });
+    // Decrypt recent transactions for AI context
+    const decryptedTxs = Transaction.decryptAll(portfolio?.transactions || []);
 
     const aiDecision = await runAIAgent(
       { monthlyAmount: user.monthlyAmount, frequency: user.frequency, riskMode: user.riskMode },
       {
-        totalBtc: portfolio?.totalBtc,
-        averageCost: portfolio?.averageCost,
-        totalInvested: portfolio?.totalInvested,
-        recentTransactions: decryptedTxs.slice(-5) // last 5 for context
+        totalBtc:           portfolio?.totalBtc,
+        averageCost:        portfolio?.averageCost,
+        totalInvested:      portfolio?.totalInvested,
+        recentTransactions: decryptedTxs.slice(-5)
       },
       currentPrice
     );
@@ -46,18 +42,15 @@ export const simulateBuy = async (req, res) => {
     const amountINR = aiDecision.amountToInvest;
     const btcAmount = amountINR / currentPrice;
 
-    // Encrypt transaction data before saving
-    const txPayload = { userId: userId.toString(), type: 'buy', amountINR, btcAmount, pricePerBtc: currentPrice, date: new Date().toISOString(), costBasis: amountINR };
-
+    // Save transaction — pre-save hook auto-encrypts all sensitive fields
     const tx = await Transaction.create({
       userId,
-      type: 'buy',
-      amountINR,
+      type:       'buy',
+      amountINR,          // plain number → hook encrypts before save
       btcAmount,
       pricePerBtc: currentPrice,
-      date: new Date(),
-      costBasis: amountINR,
-      encryptedData: encrypt(txPayload)  // encrypted copy
+      date:        new Date(),
+      costBasis:   amountINR
     });
 
     // Update portfolio
@@ -71,20 +64,22 @@ export const simulateBuy = async (req, res) => {
     updatedPortfolio.currentValue = updatedPortfolio.totalBtc * currentPrice;
     await updatedPortfolio.save();
 
-    // Audit log (encrypted)
+    // Audit log
     await log(userId, ACTIONS.SIMULATE_BUY, {
       amountINR, btcAmount, pricePerBtc: currentPrice,
       priceSignal: aiDecision.priceSignal,
-      reasoning: aiDecision.reasoning
+      reasoning:   aiDecision.reasoning
     }, req);
 
-    // Send email notification (non-blocking)
+    // Email notification (non-blocking)
     sendAiBuyEmail(
       { email: user.email, name: user.name, avgCost: portfolio?.averageCost },
-      aiDecision, tx, currentPrice
+      aiDecision, { btcAmount, amountINR }, currentPrice
     ).catch(err => console.error('Email failed:', err.message));
 
-    res.json({ aiDecision, transaction: tx, portfolio: updatedPortfolio });
+    // Return decrypted transaction to frontend
+    const decryptedTx = tx.decryptFields();
+    res.json({ aiDecision, transaction: decryptedTx, portfolio: updatedPortfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -110,7 +105,12 @@ export const getPortfolio = async (req, res) => {
     portfolio.currentValue = portfolio.totalBtc * currentPrice;
     await portfolio.save();
 
-    res.json({ portfolio, currentPrice });
+    // Decrypt all transactions before sending to frontend
+    const decryptedTransactions = Transaction.decryptAll(portfolio.transactions);
+    const portfolioObj = portfolio.toObject();
+    portfolioObj.transactions = decryptedTransactions;
+
+    res.json({ portfolio: portfolioObj, currentPrice });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
