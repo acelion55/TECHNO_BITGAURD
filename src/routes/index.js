@@ -6,7 +6,7 @@ import { simulateBuy, getPortfolio } from '../controllers/dcaController.js';
 import { getTaxReport, simulateSellTax } from '../controllers/taxController.js';
 import { getBtcPrice } from '../controllers/priceController.js';
 import { chat } from '../controllers/chatController.js';
-import { verifyPan, verifyAadhaar, sendEmailOtp, verifyEmailOtp, saveBankDetails, completeKyc, getWallet, addDeposit } from '../controllers/kycController.js';
+import { verifyPan, verifyAadhaar, sendEmailOtp, verifyEmailOtp, saveBankDetails, completeKyc, getWallet, addDeposit, getInvestmentSuggestion } from '../controllers/kycController.js';
 import { protect } from '../middleware/auth.js';
 import { requireFullAccess } from '../middleware/fullAccess.js';
 
@@ -33,9 +33,10 @@ router.post('/kyc/verify-otp',       kycLimiter, verifyEmailOtp);
 router.post('/kyc/bank',             kycLimiter, saveBankDetails);
 router.post('/kyc/complete',         kycLimiter, completeKyc);
 
-// ── Wallet (protected, no full access required to view) ───────────────────────
+// Wallet (protected)
 router.get('/wallet',                protect, getWallet);
 router.post('/wallet/deposit',       protect, addDeposit);
+router.get('/wallet/suggest',        protect, getInvestmentSuggestion);
 
 // ── User (protected) ──────────────────────────────────────────────────────────
 router.post('/user/goal',            protect, saveGoal);
