@@ -77,9 +77,11 @@ export const simulateBuy = async (req, res) => {
       aiDecision, { btcAmount, amountINR }, currentPrice
     ).catch(err => console.error('Email failed:', err.message));
 
-    // Return decrypted transaction to frontend
+    // Return decrypted transaction + decrypted portfolio to frontend
     const decryptedTx = tx.decryptFields();
-    res.json({ aiDecision, transaction: decryptedTx, portfolio: updatedPortfolio });
+    const portfolioObj = updatedPortfolio.toObject();
+    portfolioObj.transactions = Transaction.decryptAll(updatedPortfolio.transactions);
+    res.json({ aiDecision, transaction: decryptedTx, portfolio: portfolioObj });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
