@@ -36,12 +36,12 @@ router.get('/auth/me',               protect, getMe);
 router.post('/user/goal',            protect, saveGoal);
 router.get('/user/:email',           protect, getUser);
 
-// ── Portfolio & DCA (protected) ───────────────────────────────────────────────
-router.get('/portfolio/:userId',     protect, getPortfolio);
+// Portfolio & DCA (protected)
+router.get('/portfolio',             protect, getPortfolio);
 router.post('/dca/simulate-buy',     protect, simulateBuy);
 
-// ── Tax (protected) ───────────────────────────────────────────────────────────
-router.get('/tax/report/:userId',    protect, getTaxReport);
+// Tax (protected)
+router.get('/tax/report',            protect, getTaxReport);
 router.post('/tax/simulate-sell',    protect, simulateSellTax);
 
 // ── Chat (protected) ──────────────────────────────────────────────────────────

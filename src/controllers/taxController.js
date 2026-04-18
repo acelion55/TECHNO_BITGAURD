@@ -7,9 +7,10 @@ const FALLBACK_INR = 8500000;
 // GET /api/tax/report/:userId
 export const getTaxReport = async (req, res) => {
   try {
+    const userId       = req.userId; // from JWT middleware
     const priceData    = await getBtcPriceINR();
     const currentPrice = priceData?.inr || FALLBACK_INR;
-    const transactions = await Transaction.find({ userId: req.params.userId }).sort({ date: 1 });
+    const transactions = await Transaction.find({ userId }).sort({ date: 1 });
     const report       = calculateTaxReport(transactions, currentPrice);
     res.json(report);
   } catch (err) {
@@ -18,11 +19,11 @@ export const getTaxReport = async (req, res) => {
 };
 
 // POST /api/tax/simulate-sell
-// body: { userId, btcToSell }
 export const simulateSellTax = async (req, res) => {
   try {
-    const { userId, btcToSell } = req.body;
-    if (!userId || !btcToSell) return res.status(400).json({ error: 'userId and btcToSell required' });
+    const userId       = req.userId; // from JWT middleware
+    const { btcToSell } = req.body;
+    if (!btcToSell) return res.status(400).json({ error: 'btcToSell required' });
 
     const priceData    = await getBtcPriceINR();
     const currentPrice = priceData?.inr || FALLBACK_INR;
