@@ -69,7 +69,8 @@ const FALLBACK_RESPONSES = {
     if (m.includes('buy') || m.includes('dca')) return fallbackReplies.buy;
     if (m.includes('harvest')) return fallbackReplies.harvest;
     return 'I\'m having trouble connecting to AI right now. Please try again in a moment.';
-  };
+  }
+};
 
 // Check if error is rate limit related
 const isRateLimitError = (error) => {
@@ -147,6 +148,7 @@ export const callGemini = async (prompt, responseType = 'kyc_pan', retryCount = 
         if (priceMatch) currentPrice = parseInt(priceMatch[1].replace(/,/g, ''));
       } catch {}
       
+      return FALLBACK_RESPONSES.ai_agent(userGoal, portfolioData, currentPrice);
     } else if (responseType === 'chat') {
       return FALLBACK_RESPONSES.chat(prompt.split('User: ').pop()?.split('\nAssistant:')[0] || 'Hello', [], {});
     }
