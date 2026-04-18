@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateKycPanData, generateKycAadhaarData, generateInvestmentSuggestion } from '../utils/geminiManager.js';
 import bcrypt from 'bcryptjs';
 import axios from 'axios';
 import User from '../models/User.js';
@@ -11,7 +11,7 @@ import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { getDecryptedPortfolio } from '../utils/portfolioHelper.js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 
 const sanitizeUser = (user) => ({
   _id: user._id, name: user.name, email: user.email,
@@ -49,12 +49,7 @@ export const verifyPan = async (req, res) => {
       catch {}
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: 'application/json' } });
-    const result = await model.generateContent(`Generate realistic Indian KYC mock data for PAN: ${panUpper}
-Return ONLY valid JSON:
-{"fullName":"realistic Indian full name (3 words)","dob":"YYYY-MM-DD (between 1970-2000)","fatherName":"realistic Indian father name","gender":"Male or Female","panType":"Individual","address":"realistic Indian city and state"}`);
-
-    const kycData = JSON.parse(result.response.text());
+    const kycData = await generateKycPanData(panUpper);
     const encKyc  = encrypt({ ...kycData, pan: panUpper });
 
     res.json({ success: true, kycData: { fullName: kycData.fullName, dob: kycData.dob, fatherName: kycData.fatherName, gender: kycData.gender, address: kycData.address }, encryptedSession: encKyc });
@@ -71,13 +66,7 @@ export const verifyAadhaar = async (req, res) => {
     if (!encryptedSession?.iv) return res.status(400).json({ error: 'Invalid session. Please restart KYC.' });
 
     const panSession = decrypt(encryptedSession);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: 'application/json' } });
-    const result = await model.generateContent(`Generate realistic Indian Aadhaar mock data for Aadhaar: ${aadhaar.slice(0, 4)}XXXXXXXX
-The person's real name from PAN is: "${panSession.fullName}"
-Return ONLY valid JSON:
-{"fullName":"same name as PAN with possible minor variation (same person)","dob":"${panSession.dob}","gender":"${panSession.gender}","address":"realistic Indian address"}`);
-
-    const aadhaarData = JSON.parse(result.response.text());
+    const aadhaarData = await generateKycAadhaarData(aadhaar, panSession);
     if (!namesMatch(panSession.fullName, aadhaarData.fullName))
       return res.status(400).json({ error: `KYC Failed: Name mismatch. PAN: "${panSession.fullName}", Aadhaar: "${aadhaarData.fullName}". Both must belong to the same person.` });
 
@@ -259,18 +248,7 @@ export const getInvestmentSuggestion = async (req, res) => {
 
     const trend = currentPrice < avg7d * 0.97 ? 'DOWNTREND (dip — good time to buy)' : currentPrice > avg7d * 1.03 ? 'UPTREND (price high — consider smaller buy)' : 'SIDEWAYS (neutral — regular DCA recommended)';
 
-    const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: 'application/json' } });
-    const result = await model.generateContent(`You are a Bitcoin DCA advisor for Indian investors.
-User wants to invest: ₹${amount}
-Current BTC Price: ₹${currentPrice.toLocaleString('en-IN')}
-7-Day Average: ₹${avg7d.toLocaleString('en-IN')}
-Trend: ${trend}
-Last 7 days: ${priceHistory.map(p => p.date + ': ₹' + p.price.toLocaleString('en-IN')).join(', ')}
-
-Return ONLY JSON:
-{"suggestion":"one clear sentence on whether to invest now","recommendedAmount":number,"frequency":"weekly or monthly","riskMode":"smart or conservative","reasoning":"2 sentences based on price trend","priceSignal":"DIP or HIGH or NEUTRAL"}`);
-
-    const suggestion = JSON.parse(result.response.text());
+    const suggestion = await generateInvestmentSuggestion(amount, currentPrice, avg7d, trend, priceHistory);
     res.json({ ...suggestion, currentPrice, avg7d, priceHistory });
   } catch (err) {
     // Fallback suggestion

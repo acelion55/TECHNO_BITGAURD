@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callGemini } from '../utils/geminiManager.js';
 import axios from 'axios';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 
 // Fetch last 7 days BTC price history from CoinGecko
 const getPriceHistory = async () => {
@@ -77,12 +77,7 @@ Return ONLY valid JSON:
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: { responseMimeType: 'application/json' }
-    });
-    const result = await model.generateContent(prompt);
-    const parsed = JSON.parse(result.response.text());
+    const parsed = await callGemini(prompt, 'ai_agent');
     if (!parsed.action || !parsed.amountToInvest) throw new Error('Invalid response shape');
     console.log(`Gemini AI: ${parsed.action} ₹${parsed.amountToInvest} | Signal: ${parsed.priceSignal}`);
     return parsed;

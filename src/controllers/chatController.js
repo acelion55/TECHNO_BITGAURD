@@ -1,10 +1,10 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { callGemini } from '../utils/geminiManager.js';
 import Transaction from '../models/Transaction.js';
 import Portfolio from '../models/Portfolio.js';
 import User from '../models/User.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 
 const FALLBACK_INR = 8500000;
 
@@ -63,23 +63,11 @@ Total Transactions: ${transactions.length}
 - Respond in the same language the user writes in (Hindi or English).
 - Never make up numbers. Use only the data provided above.`;
 
-    // Use Gemini with chat history
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-    const chatSession = model.startChat({
-      history: [
-        { role: 'user', parts: [{ text: systemPrompt }] },
-        { role: 'model', parts: [{ text: `Understood! I'm BitGuard AI, ready to help ${user?.name} with their Bitcoin portfolio and tax optimization.` }] },
-        // inject previous messages
-        ...history.map(m => ({
-          role: m.role === 'ai' ? 'model' : 'user',
-          parts: [{ text: m.text }]
-        }))
-      ]
-    });
-
-    const result = await chatSession.sendMessage(message);
-    const reply  = result.response.text();
+    // Use Gemini with chat history - build full conversation prompt
+    const conversationHistory = history.map(m => `${m.role === 'ai' ? 'Assistant' : 'User'}: ${m.text}`).join('\n');
+    const fullPrompt = `${systemPrompt}\n\n=== CONVERSATION HISTORY ===\n${conversationHistory}\n\nUser: ${message}\nAssistant:`;
+    
+    const reply = await callGemini(fullPrompt, 'chat');
 
     res.json({ reply });
   } catch (err) {
