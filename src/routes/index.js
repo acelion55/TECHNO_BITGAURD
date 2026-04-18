@@ -6,22 +6,15 @@ import { simulateBuy, getPortfolio } from '../controllers/dcaController.js';
 import { getTaxReport, simulateSellTax } from '../controllers/taxController.js';
 import { getBtcPrice } from '../controllers/priceController.js';
 import { chat } from '../controllers/chatController.js';
+import { verifyPan, verifyAadhaar, sendEmailOtp, verifyEmailOtp, saveBankDetails, completeKyc, getWallet, addDeposit } from '../controllers/kycController.js';
 import { protect } from '../middleware/auth.js';
+import { requireFullAccess } from '../middleware/fullAccess.js';
 
 const router = express.Router();
 
-// Rate limiters
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: 10,
-  message: { error: 'Too many login attempts. Try again after 15 minutes.' }
-});
-
-const otpLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,  // 1 hour
-  max: 5,
-  message: { error: 'Too many OTP requests. Try again after 1 hour.' }
-});
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many attempts. Try after 15 minutes.' } });
+const otpLimiter   = rateLimit({ windowMs: 60 * 60 * 1000, max: 5,  message: { error: 'Too many OTP requests. Try after 1 hour.' } });
+const kycLimiter   = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: { error: 'Too many KYC attempts.' } });
 
 // ── Auth (public) ──────────────────────────────────────────────────────────────
 router.post('/auth/signup',          signup);
@@ -32,20 +25,34 @@ router.post('/auth/forgot-password', otpLimiter, forgotPassword);
 router.post('/auth/reset-password',  resetPassword);
 router.get('/auth/me',               protect, getMe);
 
+// ── KYC (public — no auth needed, user doesn't exist yet) ─────────────────────
+router.post('/kyc/pan',              kycLimiter, verifyPan);
+router.post('/kyc/aadhaar',          kycLimiter, verifyAadhaar);
+router.post('/kyc/send-otp',         otpLimiter, sendEmailOtp);
+router.post('/kyc/verify-otp',       kycLimiter, verifyEmailOtp);
+router.post('/kyc/bank',             kycLimiter, saveBankDetails);
+router.post('/kyc/complete',         kycLimiter, completeKyc);
+
+// ── Wallet (protected, no full access required to view) ───────────────────────
+router.get('/wallet',                protect, getWallet);
+router.post('/wallet/deposit',       protect, addDeposit);
+
 // ── User (protected) ──────────────────────────────────────────────────────────
 router.post('/user/goal',            protect, saveGoal);
 router.get('/user/:email',           protect, getUser);
 
-// Portfolio & DCA (protected)
-router.get('/portfolio',             protect, getPortfolio);
-router.post('/dca/simulate-buy',     protect, simulateBuy);
+// ── Portfolio (protected, full access required) ───────────────────────────────
+router.get('/portfolio',             protect, requireFullAccess, getPortfolio);
 
-// Tax (protected)
-router.get('/tax/report',            protect, getTaxReport);
-router.post('/tax/simulate-sell',    protect, simulateSellTax);
+// ── DCA (protected + full access) ─────────────────────────────────────────────
+router.post('/dca/simulate-buy',     protect, requireFullAccess, simulateBuy);
 
-// ── Chat (protected) ──────────────────────────────────────────────────────────
-router.post('/chat',                 protect, chat);
+// ── Tax (protected + full access) ─────────────────────────────────────────────
+router.get('/tax/report',            protect, requireFullAccess, getTaxReport);
+router.post('/tax/simulate-sell',    protect, requireFullAccess, simulateSellTax);
+
+// ── Chat (protected + full access) ────────────────────────────────────────────
+router.post('/chat',                 protect, requireFullAccess, chat);
 
 // ── Price (public) ────────────────────────────────────────────────────────────
 router.get('/price/btc',             getBtcPrice);

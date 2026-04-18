@@ -211,7 +211,10 @@ const sanitizeUser = (user) => ({
   _id: user._id, name: user.name, email: user.email, phone: user.phone,
   pan: user.pan, aadhaar: user.aadhaar, monthlyAmount: user.monthlyAmount,
   frequency: user.frequency, durationMonths: user.durationMonths,
-  riskMode: user.riskMode, isVerified: user.isVerified, createdAt: user.createdAt
+  riskMode: user.riskMode, isVerified: user.isVerified, createdAt: user.createdAt,
+  kycStatus: user.kycStatus, hasFullAccess: user.hasFullAccess,
+  walletBalance: user.walletBalance, walletFunded: user.walletFunded,
+  hasBankDetails: user.hasBankDetails
 });
 
 const seedMockData = async (userId, monthlyAmount) => {
