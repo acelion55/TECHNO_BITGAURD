@@ -47,11 +47,13 @@ transactionSchema.methods.decryptFields = function () {
       const tag = envelope?.[field]?.tag;
       const data = this[field];
       if (!iv || !tag || !data) {
-        // Field not encrypted — already a plain number (shouldn't happen but handle gracefully)
-        obj[field] = typeof data === 'number' ? data : null;
+        // Field not encrypted or missing envelope - set to null
+        console.warn(`Missing encryption envelope for ${field}, setting to null`);
+        obj[field] = null;
         continue;
       }
-      obj[field] = decrypt({ iv, data, tag });
+      const decrypted = decrypt({ iv, data, tag });
+      obj[field] = Number(decrypted) || 0;
     } catch (e) {
       console.error(`decryptFields failed for ${field}:`, e.message);
       obj[field] = null;

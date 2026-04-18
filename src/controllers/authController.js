@@ -238,10 +238,10 @@ const seedMockData = async (userId, monthlyAmount) => {
   const decrypted     = Transaction.decryptAll(allTx);
   const totalInvested = decrypted.reduce((s, t) => s + (Number(t.amountINR) || 0), 0);
   const totalBtc      = decrypted.reduce((s, t) => s + (Number(t.btcAmount)  || 0), 0);
+  const averageCost   = totalBtc > 0 ? totalInvested / totalBtc : 0;
 
   await Portfolio.create({
-    userId, totalInvested, totalBtc,
-    averageCost: totalInvested / totalBtc,
+    userId, totalInvested, totalBtc, averageCost,
     currentValue: totalBtc * currentPrice,
     transactions: allTx.map((t) => t._id)
   });

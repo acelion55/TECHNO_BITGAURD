@@ -11,11 +11,42 @@ export const getTaxReport = async (req, res) => {
     const priceData    = await getBtcPriceINR();
     const currentPrice = priceData?.inr || FALLBACK_INR;
     const transactions = await Transaction.find({ userId }).sort({ date: 1 });
+    
+    console.log(`Tax Report Debug - User: ${userId}`);
+    console.log(`Transactions found: ${transactions.length}`);
+    console.log(`Current BTC price: ₹${currentPrice.toLocaleString('en-IN')}`);
+    
+    if (transactions.length > 0) {
+      console.log('Sample raw transaction:', {
+        amountINR: transactions[0].amountINR,
+        btcAmount: transactions[0].btcAmount,
+        hasEnc: !!transactions[0].enc
+      });
+    }
+    
     // Decrypt before tax calculation
-    const decrypted    = Transaction.decryptAll(transactions);
-    const report       = calculateTaxReport(decrypted, currentPrice);
+    const decrypted = Transaction.decryptAll(transactions);
+    
+    if (decrypted.length > 0) {
+      console.log('Sample decrypted transaction:', {
+        amountINR: decrypted[0].amountINR,
+        btcAmount: decrypted[0].btcAmount,
+        pricePerBtc: decrypted[0].pricePerBtc,
+        costBasis: decrypted[0].costBasis
+      });
+    }
+    
+    const report = calculateTaxReport(decrypted, currentPrice);
+    console.log('Tax report summary:', {
+      totalInvested: report.totalInvested,
+      currentValue: report.currentValue,
+      totalProfit: report.totalProfit,
+      lotsCount: report.lots?.length
+    });
+    
     res.json(report);
   } catch (err) {
+    console.error('Tax report error:', err);
     res.status(500).json({ error: err.message });
   }
 };

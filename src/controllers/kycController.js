@@ -217,7 +217,8 @@ export const addDeposit = async (req, res) => {
       const decrypted     = Transaction.decryptAll(allTx);
       const totalInvested = decrypted.reduce((s, t) => s + (Number(t.amountINR) || 0), 0);
       const totalBtc      = decrypted.reduce((s, t) => s + (Number(t.btcAmount)  || 0), 0);
-      await Portfolio.create({ userId: req.userId, totalInvested, totalBtc, averageCost: totalInvested / totalBtc, currentValue: totalBtc * currentPrice, transactions: allTx.map(t => t._id) });
+      const averageCost   = totalBtc > 0 ? totalInvested / totalBtc : 0;
+      await Portfolio.create({ userId: req.userId, totalInvested, totalBtc, averageCost, currentValue: totalBtc * currentPrice, transactions: allTx.map(t => t._id) });
     }
 
     await log(req.userId, 'WALLET_DEPOSIT', { amount, monthlyAmount }, req);

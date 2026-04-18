@@ -48,7 +48,7 @@ export const simulateBuy = async (req, res) => {
       { $inc: { totalInvested: amountINR, totalBtc: btcAmount }, $push: { transactions: tx._id } },
       { new: true }
     );
-    updated.averageCost  = updated.totalInvested / updated.totalBtc;
+    updated.averageCost  = updated.totalBtc > 0 ? updated.totalInvested / updated.totalBtc : 0;
     updated.currentValue = updated.totalBtc * currentPrice;
     await updated.save();
 

@@ -55,6 +55,27 @@ router.post('/tax/simulate-sell',    protect, requireFullAccess, simulateSellTax
 // ── Chat (protected + full access) ────────────────────────────────────────────
 router.post('/chat',                 protect, requireFullAccess, chat);
 
+// ── Debug endpoint ────────────────────────────────────────────────────────────
+router.get('/debug/transactions', protect, async (req, res) => {
+  try {
+    const Transaction = (await import('../models/Transaction.js')).default;
+    const txs = await Transaction.find({ userId: req.userId }).limit(3);
+    
+    const debug = txs.map(tx => ({
+      id: tx._id,
+      rawAmountINR: tx.amountINR,
+      rawBtcAmount: tx.btcAmount,
+      hasEnc: !!tx.enc,
+      encStructure: tx.enc,
+      decrypted: tx.decryptFields()
+    }));
+    
+    res.json({ count: txs.length, debug });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
 // ── Price (public) ────────────────────────────────────────────────────────────
 router.get('/price/btc',             getBtcPrice);
 
