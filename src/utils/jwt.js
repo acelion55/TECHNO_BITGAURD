@@ -27,22 +27,25 @@ export const compareToken = (token, hash) =>
 export const setAuthCookies = (res, accessToken, refreshToken) => {
   const isProd = process.env.NODE_ENV === 'production';
 
-  res.cookie('accessToken', accessToken, {
+  const cookieOptions = {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    secure: true,           // always true (Render uses HTTPS)
+    sameSite: 'none',       // required for cross-origin cookies (Vercel → Render)
+  };
+
+  res.cookie('accessToken', accessToken, {
+    ...cookieOptions,
     maxAge: 15 * 60 * 1000           // 15 minutes
   });
 
   res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    ...cookieOptions,
     maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days
   });
 };
 
 export const clearAuthCookies = (res) => {
-  res.clearCookie('accessToken');
-  res.clearCookie('refreshToken');
+  const options = { httpOnly: true, secure: true, sameSite: 'none' };
+  res.clearCookie('accessToken', options);
+  res.clearCookie('refreshToken', options);
 };

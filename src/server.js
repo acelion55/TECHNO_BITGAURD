@@ -17,14 +17,16 @@ app.use(cors({
     const allowed = [
       process.env.FRONTEND_URL,
       'http://localhost:5173',
-      'https://techno116.vercel.app'
+      'https://techno116.vercel.app',
+      'https://techno01-lfvns48um-lionxcodes-projects.vercel.app'
     ].filter(Boolean);
     if (!origin || allowed.includes(origin)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['set-cookie']
 }));
 
 app.use(express.json());
