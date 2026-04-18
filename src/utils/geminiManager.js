@@ -1,16 +1,22 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const API_KEYS = [
+  process.env.GEMINI_API_KEY,
+  process.env.GEMINI_API_KEY_2,
+  process.env.GEMINI_API_KEY_3,
+].filter(Boolean);
 
-// Model priority order - try these in sequence when rate limited
 const MODELS = [
   'gemini-2.5-flash',
-  'gemini-1.5-flash', 
-  'gemini-1.5-pro',
-  'gemini-pro'
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
 ];
 
+// Each attempt = next (key, model) combo: key1/model1, key2/model1, key3/model1, key1/model2 ...
+let currentKeyIndex = 0;
 let currentModelIndex = 0;
+
+const getClient = () => new GoogleGenerativeAI(API_KEYS[currentKeyIndex]);
 
 // Fallback responses when all models are rate limited
 const FALLBACK_RESPONSES = {
@@ -73,46 +79,57 @@ const FALLBACK_RESPONSES = {
 };
 
 // Check if error is rate limit related
-const isRateLimitError = (error) => {
+const isRetryableError = (error) => {
   const message = error.message?.toLowerCase() || '';
   return message.includes('429') || 
          message.includes('quota') || 
          message.includes('rate limit') ||
-         message.includes('too many requests');
+         message.includes('too many requests') ||
+         message.includes('404') ||
+         message.includes('not found') ||
+         message.includes('not supported') ||
+         message.includes('400') ||
+         message.includes('api key not valid') ||
+         message.includes('api_key_invalid');
 };
 
-// Get next available model
-const getNextModel = () => {
-  currentModelIndex = (currentModelIndex + 1) % MODELS.length;
-  return MODELS[currentModelIndex];
+// Advance to next key first, then next model when keys wrap around
+const getNextCombo = () => {
+  currentKeyIndex++;
+  if (currentKeyIndex >= API_KEYS.length) {
+    currentKeyIndex = 0;
+    currentModelIndex = (currentModelIndex + 1) % MODELS.length;
+  }
 };
 
 // Smart Gemini API call with automatic fallback
 export const callGemini = async (prompt, responseType = 'kyc_pan', retryCount = 0) => {
-  const maxRetries = MODELS.length;
+  const maxRetries = MODELS.length * API_KEYS.length;
   
   try {
     const currentModel = MODELS[currentModelIndex];
-    console.log(`🤖 Trying Gemini model: ${currentModel} (attempt ${retryCount + 1}/${maxRetries})`);
+    console.log(`🤖 Trying Gemini model: ${currentModel} key#${currentKeyIndex + 1} (attempt ${retryCount + 1}/${maxRetries})`);
     
-    const model = genAI.getGenerativeModel({ 
-      model: currentModel, 
-      generationConfig: { responseMimeType: 'application/json' } 
+    const model = getClient().getGenerativeModel({ 
+      model: currentModel,
+      generationConfig: responseType === 'chat'
+        ? {}
+        : { responseMimeType: 'application/json' }
     });
     
     const result = await model.generateContent(prompt);
-    const response = JSON.parse(result.response.text());
+    const raw = result.response.text();
+    const response = responseType === 'chat' ? raw : JSON.parse(raw);
     
-    console.log(`✅ Success with ${currentModel}`);
+    console.log(`✅ Success with ${currentModel} key#${currentKeyIndex + 1}`);
     return response;
     
   } catch (error) {
-    console.error(`❌ ${MODELS[currentModelIndex]} failed:`, error.message);
+    console.error(`❌ ${MODELS[currentModelIndex]} key#${currentKeyIndex + 1} failed:`, error.message);
     
-    if (isRateLimitError(error) && retryCount < maxRetries - 1) {
-      // Switch to next model and retry
-      const nextModel = getNextModel();
-      console.log(`🔄 Rate limited, switching to: ${nextModel}`);
+    if (isRetryableError(error) && retryCount < maxRetries - 1) {
+      getNextCombo();
+      console.log(`🔄 Switching to: ${MODELS[currentModelIndex]} key#${currentKeyIndex + 1}`);
       return callGemini(prompt, responseType, retryCount + 1);
     }
     
@@ -150,7 +167,12 @@ export const callGemini = async (prompt, responseType = 'kyc_pan', retryCount = 
       
       return FALLBACK_RESPONSES.ai_agent(userGoal, portfolioData, currentPrice);
     } else if (responseType === 'chat') {
-      return FALLBACK_RESPONSES.chat(prompt.split('User: ').pop()?.split('\nAssistant:')[0] || 'Hello', [], {});
+      const m = (prompt.split('User: ').pop()?.split('\nAssistant:')[0] || '').toLowerCase();
+      if (m.includes('portfolio') || m.includes('value')) return 'Your portfolio data is loaded. Check the Dashboard for live values.';
+      if (m.includes('tax')) return 'India VDA tax is 30% flat on profits. Visit the Tax Optimizer page for your detailed report.';
+      if (m.includes('buy') || m.includes('dca')) return 'Your DCA agent is active. Use the DCA Agent page to simulate a buy.';
+      if (m.includes('harvest')) return 'Tax loss harvesting lets you sell loss lots to reduce taxable profit. Check the Tax Optimizer page.';
+      return "I'm having trouble connecting to AI right now. Please try again in a moment.";
     }
     
     throw error; // Re-throw if no fallback available
@@ -191,6 +213,7 @@ Return ONLY JSON:
 
 // Reset to first model (call this periodically or on successful requests)
 export const resetModelIndex = () => {
+  currentKeyIndex = 0;
   currentModelIndex = 0;
-  console.log('🔄 Reset to primary model: gemini-2.5-flash');
+  console.log('🔄 Reset to primary model: gemini-2.5-flash key#1');
 };

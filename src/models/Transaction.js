@@ -1,61 +1,67 @@
 import mongoose from 'mongoose';
-import { encrypt, decrypt } from '../utils/encryption.js';
+import { ecEncrypt, ecDecrypt } from '../utils/ecEncryption.js';
 
 const SENSITIVE = ['amountINR', 'btcAmount', 'pricePerBtc', 'costBasis'];
+
+// Each encrypted field stores: ephemeralPub + iv + tag + data
+const ecEnvelope = {
+  ephemeralPub: String,
+  iv:           String,
+  tag:          String,
+  data:         String,
+};
 
 const transactionSchema = new mongoose.Schema({
   userId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   type:        { type: String, default: 'buy' },
   date:        { type: Date, default: Date.now },
 
-  // Stored as AES-256-GCM encrypted hex strings
+  // Ciphertext hex strings (ECDH+AES-256-GCM)
   amountINR:   { type: String, required: true },
   btcAmount:   { type: String, required: true },
   pricePerBtc: { type: String, required: true },
   costBasis:   { type: String, required: true },
 
-  // Encryption envelopes — named 'enc' (not '_enc') so Mongoose returns it
+  // ECDH envelopes — one ephemeral public key per field
   enc: {
-    amountINR:   { iv: String, tag: String },
-    btcAmount:   { iv: String, tag: String },
-    pricePerBtc: { iv: String, tag: String },
-    costBasis:   { iv: String, tag: String },
-  }
+    amountINR:   ecEnvelope,
+    btcAmount:   ecEnvelope,
+    pricePerBtc: ecEnvelope,
+    costBasis:   ecEnvelope,
+  },
 });
 
-// ── Pre-save: encrypt all sensitive fields ─────────────────────────────────────
+// ── Pre-save: ECDH-encrypt all sensitive fields ────────────────────────────────
 transactionSchema.pre('save', function (next) {
   if (!this.enc) this.enc = {};
   for (const field of SENSITIVE) {
-    if ((this.isModified(field) || this.isNew) && typeof this[field] === 'number') {
-      const result     = encrypt(this[field]);
-      this[field]      = result.data;
-      this.enc[field]  = { iv: result.iv, tag: result.tag };
+    const val = this[field];
+    // Mongoose coerces numbers to strings before pre-save, so check both
+    const isPlain = typeof val === 'number' ||
+      (typeof val === 'string' && val.length < 40 && !isNaN(Number(val)) && val.trim() !== '');
+    if ((this.isModified(field) || this.isNew) && isPlain) {
+      const result    = ecEncrypt(Number(val));
+      this[field]     = result.data;
+      this.enc[field] = { ephemeralPub: result.ephemeralPub, iv: result.iv, tag: result.tag, data: result.data };
     }
   }
   next();
 });
 
-// ── Decrypt a single doc back to plain numbers ─────────────────────────────────────────────
+// ── Decrypt a single doc back to plain numbers ─────────────────────────────────
 transactionSchema.methods.decryptFields = function () {
   const obj = this.toObject();
-  // Support both 'enc' (new) and '_enc' (old) field names for backwards compatibility
-  const envelope = this.enc || this._doc?._enc;
   for (const field of SENSITIVE) {
     try {
-      const iv  = envelope?.[field]?.iv;
-      const tag = envelope?.[field]?.tag;
-      const data = this[field];
-      if (!iv || !tag || !data) {
-        // Field not encrypted or missing envelope - set to null
-        console.warn(`Missing encryption envelope for ${field}, setting to null`);
+      const env = this.enc?.[field];
+      if (!env?.ephemeralPub || !env?.iv || !env?.tag || !env?.data) {
+        console.warn(`Missing ECDH envelope for ${field}, setting to null`);
         obj[field] = null;
         continue;
       }
-      const decrypted = decrypt({ iv, data, tag });
-      obj[field] = Number(decrypted) || 0;
+      obj[field] = Number(ecDecrypt(env)) || 0;
     } catch (e) {
-      console.error(`decryptFields failed for ${field}:`, e.message);
+      console.error(`ECDH decryptFields failed for ${field}:`, e.message);
       obj[field] = null;
     }
   }

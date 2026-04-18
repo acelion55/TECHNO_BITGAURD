@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import Portfolio from '../models/Portfolio.js';
 import Transaction from '../models/Transaction.js';
+import WalletTx from '../models/WalletTx.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { runAIAgent } from '../services/aiAgent.js';
 import { log, ACTIONS } from '../services/auditService.js';
@@ -32,11 +33,30 @@ export const simulateBuy = async (req, res) => {
     if (aiDecision.action !== 'buy') {
       await log(userId, ACTIONS.AI_BUY_DECISION, { action: 'hold', reason: aiDecision.reasoning }, req);
       const decPortfolio = await getDecryptedPortfolio(userId);
-      return res.json({ aiDecision, transaction: null, portfolio: decPortfolio });
+      return res.json({ aiDecision, transaction: null, portfolio: decPortfolio, walletBalance: user.walletBalance });
     }
 
     const amountINR = aiDecision.amountToInvest;
+
+    // ── Check sufficient wallet balance ───────────────────────────────────────
+    if (user.walletBalance < amountINR) {
+      return res.status(400).json({
+        error: `Insufficient wallet balance. Need ₹${amountINR.toLocaleString('en-IN')} but have ₹${user.walletBalance.toLocaleString('en-IN')}.`
+      });
+    }
+
     const btcAmount = amountINR / currentPrice;
+
+    // ── Deduct from wallet ────────────────────────────────────────────────────
+    user.walletBalance -= amountINR;
+    await user.save();
+
+    // ── Record wallet debit ───────────────────────────────────────────────────
+    await WalletTx.create({
+      userId, type: 'debit', amount: amountINR,
+      method: 'DCA_BUY', status: 'success',
+      reference: `DCA_${Date.now()}`
+    });
 
     const tx = await Transaction.create({
       userId, type: 'buy', amountINR, btcAmount,
@@ -61,7 +81,7 @@ export const simulateBuy = async (req, res) => {
 
     const decPortfolio = await getDecryptedPortfolio(userId);
     const decryptedTx  = tx.decryptFields();
-    res.json({ aiDecision, transaction: decryptedTx, portfolio: decPortfolio });
+    res.json({ aiDecision, transaction: decryptedTx, portfolio: decPortfolio, walletBalance: user.walletBalance });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
