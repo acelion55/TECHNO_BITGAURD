@@ -5,7 +5,6 @@ import Transaction from '../models/Transaction.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
 import { log, ACTIONS } from '../services/auditService.js';
-import { encrypt } from '../utils/encryption.js';
 import {
   generateAccessToken, generateRefreshToken,
   verifyRefreshToken, hashToken, compareToken,
@@ -227,17 +226,17 @@ const seedMockData = async (userId, monthlyAmount) => {
     const btcAmount   = monthlyAmount / pricePerBtc;
     const date        = new Date();
     date.setMonth(date.getMonth() - (8 - i));
-    const txPayload = { userId: userId.toString(), type: 'buy', amountINR: monthlyAmount, btcAmount, pricePerBtc, date: date.toISOString(), costBasis: monthlyAmount };
     await Transaction.create({
       userId, type: 'buy', amountINR: monthlyAmount, btcAmount,
-      pricePerBtc, date, costBasis: monthlyAmount,
-      encryptedData: encrypt(txPayload)
+      pricePerBtc, date, costBasis: monthlyAmount
     });
   }
 
   const allTx         = await Transaction.find({ userId });
-  const totalInvested = allTx.reduce((s, t) => s + t.amountINR, 0);
-  const totalBtc      = allTx.reduce((s, t) => s + t.btcAmount, 0);
+  // Decrypt before summing — fields are encrypted strings in DB
+  const decrypted     = Transaction.decryptAll(allTx);
+  const totalInvested = decrypted.reduce((s, t) => s + (Number(t.amountINR) || 0), 0);
+  const totalBtc      = decrypted.reduce((s, t) => s + (Number(t.btcAmount)  || 0), 0);
 
   await Portfolio.create({
     userId, totalInvested, totalBtc,

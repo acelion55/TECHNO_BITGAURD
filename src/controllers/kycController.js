@@ -223,8 +223,10 @@ export const addDeposit = async (req, res) => {
         await Transaction.create({ userId: req.userId, type: 'buy', amountINR: Number(monthlyAmount), btcAmount, pricePerBtc, date, costBasis: Number(monthlyAmount) });
       }
       const allTx         = await Transaction.find({ userId: req.userId });
-      const totalInvested = allTx.reduce((s, t) => s + t.amountINR, 0);
-      const totalBtc      = allTx.reduce((s, t) => s + t.btcAmount, 0);
+      // Decrypt before summing — fields are encrypted strings in DB
+      const decrypted     = Transaction.decryptAll(allTx);
+      const totalInvested = decrypted.reduce((s, t) => s + (Number(t.amountINR) || 0), 0);
+      const totalBtc      = decrypted.reduce((s, t) => s + (Number(t.btcAmount)  || 0), 0);
       await Portfolio.create({ userId: req.userId, totalInvested, totalBtc, averageCost: totalInvested / totalBtc, currentValue: totalBtc * currentPrice, transactions: allTx.map(t => t._id) });
     }
 
