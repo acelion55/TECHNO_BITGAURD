@@ -5,7 +5,7 @@ import WalletTx from '../models/WalletTx.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { runAIAgent } from '../services/aiAgent.js';
 import { log, ACTIONS } from '../services/auditService.js';
-import { sendAiBuyEmail } from '../services/emailService.js';
+import { sendAiBuyEmail, sendAiHoldEmail, sendLowBalanceEmail } from '../services/emailService.js';
 import { getDecryptedPortfolio } from '../utils/portfolioHelper.js';
 
 const FALLBACK_INR = 8500000;
@@ -32,6 +32,7 @@ export const simulateBuy = async (req, res) => {
 
     if (aiDecision.action !== 'buy') {
       await log(userId, ACTIONS.AI_BUY_DECISION, { action: 'hold', reason: aiDecision.reasoning }, req);
+      sendAiHoldEmail(user, aiDecision, currentPrice).catch(() => {});
       const decPortfolio = await getDecryptedPortfolio(userId);
       return res.json({ aiDecision, transaction: null, portfolio: decPortfolio, walletBalance: user.walletBalance });
     }
@@ -40,6 +41,7 @@ export const simulateBuy = async (req, res) => {
 
     // ── Check sufficient wallet balance ───────────────────────────────────────
     if (user.walletBalance < amountINR) {
+      sendLowBalanceEmail(user, user.walletBalance, amountINR).catch(() => {});
       return res.status(400).json({
         error: `Insufficient wallet balance. Need ₹${amountINR.toLocaleString('en-IN')} but have ₹${user.walletBalance.toLocaleString('en-IN')}.`
       });

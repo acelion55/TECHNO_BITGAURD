@@ -7,7 +7,7 @@ import Portfolio from '../models/Portfolio.js';
 import Transaction from '../models/Transaction.js';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { log, ACTIONS } from '../services/auditService.js';
-import { sendOtpEmail, sendWelcomeEmail } from '../services/emailService.js';
+import { sendOtpEmail, sendWelcomeEmail, sendDepositEmail } from '../services/emailService.js';
 import { getBtcPriceINR } from '../services/priceService.js';
 import { getDecryptedPortfolio } from '../utils/portfolioHelper.js';
 
@@ -182,7 +182,7 @@ export const getWallet = async (req, res) => {
 // ── POST /api/wallet/deposit — add funds + set DCA goal + seed portfolio ────────
 export const addDeposit = async (req, res) => {
   try {
-    const { amount, monthlyAmount, frequency, durationMonths, riskMode } = req.body;
+    const { amount, monthlyAmount, frequency, durationMonths, riskMode, scheduleTime, scheduleDays, scheduleDate } = req.body;
     if (!amount || amount < 100) return res.status(400).json({ error: 'Minimum deposit ₹100' });
     if (!monthlyAmount || monthlyAmount < 100) return res.status(400).json({ error: 'Monthly investment amount required (min ₹100)' });
 
@@ -194,6 +194,9 @@ export const addDeposit = async (req, res) => {
     user.frequency       = frequency || 'monthly';
     user.durationMonths  = Number(durationMonths) || 12;
     user.riskMode        = riskMode || 'smart';
+    user.scheduleTime    = scheduleTime || '09:00';
+    user.scheduleDays    = scheduleDays || ['MON'];
+    user.scheduleDate    = Number(scheduleDate) || 1;
     await user.save();
 
     // Record wallet deposit
@@ -222,6 +225,7 @@ export const addDeposit = async (req, res) => {
     }
 
     await log(req.userId, 'WALLET_DEPOSIT', { amount, monthlyAmount }, req);
+    sendDepositEmail(user, amount, user.walletBalance).catch(() => {});
     const portfolio = await getDecryptedPortfolio(req.userId);
     res.json({ success: true, newBalance: user.walletBalance, hasFullAccess: user.hasFullAccess, user: sanitizeUser(user), portfolio });
   } catch (err) {

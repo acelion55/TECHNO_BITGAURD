@@ -7,8 +7,8 @@ const ENCRYPTED_FIELDS = ['pan', 'aadhaar', 'bankAccount', 'ifsc', 'bankHolderNa
 const userSchema = new mongoose.Schema({
   // Basic Info
   name:          { type: String, required: true, trim: true },
-  email:         { type: String, default: null, lowercase: true },
-  phone:         { type: String, default: null },
+  email:         { type: String, default: null, lowercase: true, sparse: true },
+  phone:         { type: String, default: null, sparse: true },
 
   // Auth
   mpin:          { type: String, default: null },
@@ -50,9 +50,12 @@ const userSchema = new mongoose.Schema({
 
   // DCA Goal
   monthlyAmount:  { type: Number, default: 0 },
-  frequency:      { type: String, enum: ['weekly', 'monthly'], default: 'monthly' },
+  frequency:      { type: String, enum: ['daily', 'weekly', 'monthly'], default: 'monthly' },
   durationMonths: { type: Number, default: 12 },
   riskMode:       { type: String, enum: ['conservative', 'smart'], default: 'smart' },
+  scheduleTime:   { type: String, default: '09:00' },   // for daily: HH:MM
+  scheduleDays:   { type: [String], default: ['MON'] },  // for weekly: ['MON','WED']
+  scheduleDate:   { type: Number, default: 1 },          // for monthly: 1-28
 
   // Refresh Token (hashed)
   refreshToken:   { type: String, default: null },

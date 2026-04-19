@@ -2,23 +2,24 @@ import User from '../models/User.js';
 import Portfolio from '../models/Portfolio.js';
 import Transaction from '../models/Transaction.js';
 import { getBtcPriceINR } from '../services/priceService.js';
+import { sendGoalUpdatedEmail } from '../services/emailService.js';
 
 // POST /api/user/goal
 export const saveGoal = async (req, res) => {
   try {
-    const { name, email, monthlyAmount, frequency, durationMonths, riskMode } = req.body;
+    const { name, email, monthlyAmount, frequency, durationMonths, riskMode, scheduleTime, scheduleDays, scheduleDate } = req.body;
 
     let user = await User.findOne({ email });
     if (user) {
-      Object.assign(user, { name, monthlyAmount, frequency, durationMonths, riskMode });
+      Object.assign(user, { name, monthlyAmount, frequency, durationMonths, riskMode, scheduleTime, scheduleDays, scheduleDate });
       await user.save();
     } else {
-      user = await User.create({ name, email, monthlyAmount, frequency, durationMonths, riskMode });
-      // Seed mock transactions for demo
+      user = await User.create({ name, email, monthlyAmount, frequency, durationMonths, riskMode, scheduleTime, scheduleDays, scheduleDate });
       await seedMockData(user._id, monthlyAmount);
     }
 
     const portfolio = await Portfolio.findOne({ userId: user._id }).populate('transactions');
+    sendGoalUpdatedEmail(user).catch(() => {});
     res.json({ user, portfolio });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -214,7 +214,8 @@ const sanitizeUser = (user) => ({
   riskMode: user.riskMode, isVerified: user.isVerified, createdAt: user.createdAt,
   kycStatus: user.kycStatus, hasFullAccess: user.hasFullAccess,
   walletBalance: user.walletBalance, walletFunded: user.walletFunded,
-  hasBankDetails: user.hasBankDetails
+  hasBankDetails: user.hasBankDetails,
+  scheduleTime: user.scheduleTime, scheduleDays: user.scheduleDays, scheduleDate: user.scheduleDate
 });
 
 const seedMockData = async (userId, monthlyAmount) => {
